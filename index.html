@@ -341,7 +341,7 @@ if(typeof ROSTER==='undefined'){var ROSTER={};}
 /* ===== คลาวด์ส่วนกลาง (Google Apps Script + Sheet) =====
    ลิงก์ /exec ตั้งค่าผ่านปุ่ม "⚙️ ตั้งค่าคลาวด์" (เก็บใน localStorage)
    ถ้าจะฝังลิงก์ให้ทุกเครื่องใช้อัตโนมัติ ใส่ในตัวแปร CLOUD_URL ด้านล่าง */
-var CLOUD_URL='';                 // (ทางเลือก) ใส่ลิงก์ /exec ตรงนี้เพื่อใช้กับทุกเครื่อง
+var CLOUD_URL='https://script.google.com/macros/s/AKfycbyt0HfLY6ZvCc12rFdJI74KGim_wmLapTKNlvhe7U3O3LlNaaCq97iHkZQ-51mLLVKY/exec';  // ลิงก์คลาวด์ (ฝังให้ทุกเครื่องใช้อัตโนมัติ)
 var SAVE_PW='2301';               // รหัสผ่านสำหรับบันทึก
 var unlocked=(sessionStorage.getItem('hwUnlocked')==='1');
 var pushTimer=null, cloudBusy=false, pendingPush=false;
