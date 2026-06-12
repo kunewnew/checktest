@@ -80,6 +80,11 @@
   #grid tfoot th .ft-pct{font-weight:800;font-size:14px}
   #grid tfoot th.ft-exam{background:#f3e4c4}
   #grid tfoot th .ft-sub{color:var(--muted);font-weight:400}
+  #grid tfoot th .ft-rpt{display:inline-block;margin-top:4px;font-size:11.5px;font-weight:700;color:#fff;
+    background:var(--green);border-radius:6px;padding:2px 8px;cursor:pointer;font-family:var(--font-chalk)}
+  #grid tfoot th .ft-rpt:hover{background:var(--green-d)}
+  #workRptDlg{max-width:760px}
+  #wrPreview{max-height:60vh;overflow:auto;background:#e8eee9;border-radius:10px;padding:14px}
   th.exam{background:var(--exam-bg);color:var(--exam)}
   td.examcell{background:var(--exam-bg)}
   td.examcell input{width:62px;text-align:center;padding:5px 4px;border-radius:6px}
@@ -272,6 +277,17 @@
   </div>
 </div></dialog>
 
+<!-- dialog รายงานรายชิ้นงาน -->
+<dialog id="workRptDlg"><div class="dlg-body">
+  <h2 id="wrTitle">รายงาน</h2>
+  <p class="muted" style="margin:-6px 0 10px">ตัวอย่างรูปที่จะส่ง — กดปุ่มด้านล่างเพื่อบันทึก/แชร์เข้า LINE</p>
+  <div id="wrPreview"></div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end">
+    <button class="ghost" id="wrClose">ปิด</button>
+    <button id="wrLine">🖼️ ส่งรูปเข้า LINE</button>
+  </div>
+</div></dialog>
+
 <script>
 /* ===== เมนูเว็บ (drawer) — เพิ่มเว็บใหม่: ก๊อปบรรทัด {icon,label,url} วางต่อท้าย ===== */
 var SITE_LINKS=[
@@ -444,13 +460,15 @@ function renderFooter(){
       cur.students.forEach(function(s){var v=val(s.id,w.id); if(v!==''&&v!=null&&!isNaN(v)){sum+=Number(v);cnt++;}});
       var avg=cnt?Math.round(sum/cnt*100)/100:0;
       h+='<th class="ft-exam"><span class="ft-pct">'+avg+'</span>/'+(w.max||0)+
-         '<br><span class="ft-sub">กรอก '+cnt+'/'+n+'</span></th>';
+         '<br><span class="ft-sub">กรอก '+cnt+'/'+n+'</span>'+
+         '<br><span class="ft-rpt" data-rptw="'+w.id+'">📤 ผลสอบ/LINE</span></th>';
     } else {
       var c=0; cur.students.forEach(function(s){if(isSent(s.id,w.id))c++;});
       var pct=n?Math.round(c/n*100):0;
       var miss=n-c;
       h+='<th><span class="ft-pct">'+c+'/'+n+'</span> ('+pct+'%)'+
-         '<br><span class="ft-sub">ค้าง '+miss+' คน</span></th>';
+         '<br><span class="ft-sub">ค้าง '+miss+' คน</span>'+
+         '<br><span class="ft-rpt" data-rptw="'+w.id+'">📤 ตามงาน/LINE</span></th>';
     }
   });
   // คอลัมน์ค้างส่งรวม
@@ -467,6 +485,10 @@ document.querySelector('#grid').addEventListener('click',function(e){
   var p=pendingCount(sid); var pe=document.querySelector('[data-pend="'+sid+'"]');
   if(pe){pe.textContent=p;pe.className=p?'pend':'pend0';}
   renderFooter(); save();
+});
+/* คลิกลิงก์รายงานในแถวสรุปท้ายตาราง */
+document.querySelector('#grid').addEventListener('click',function(e){
+  var w=e.target.getAttribute('data-rptw'); if(w)openWorkReport(w);
 });
 /* กรอกคะแนนข้อสอบ */
 document.querySelector('#grid').addEventListener('input',function(e){
@@ -489,6 +511,7 @@ function renderWorks(){
     d.innerHTML='<span class="'+(w.type==='สอบ'?'tag-exam':'tag-send')+'">'+(w.type==='สอบ'?'สอบ':'งานส่ง')+'</span>'+
       '<input value="'+escapeHtml(w.name)+'" data-i="'+i+'" data-f="name" style="flex:2;min-width:160px">'+
       (w.type==='สอบ'?'<input type="number" min="0" value="'+(w.max||0)+'" data-i="'+i+'" data-f="max" title="คะแนนเต็ม" style="width:90px">':'')+
+      '<button class="ghost small" data-rptw2="'+escapeHtml(w.id)+'">📤 รายงาน/LINE</button>'+
       '<button class="danger small" data-delw="'+i+'">✕</button>';
     box.appendChild(d);
   });
@@ -501,6 +524,7 @@ document.getElementById('workList').addEventListener('input',function(e){
   save();
 });
 document.getElementById('workList').addEventListener('click',function(e){
+  var r=e.target.getAttribute('data-rptw2'); if(r){openWorkReport(r);return;}
   var d=e.target.getAttribute('data-delw'); if(d==null)return;
   if(confirm('ลบงานนี้? (คะแนน/สถานะของงานนี้จะหายไป)')){
     var w=cur.works[Number(d)];
@@ -942,6 +966,108 @@ function buildAllReportHtml(){
       '<th style="padding:8px;border:1px solid #cfd8d2">นักเรียน</th><th style="padding:8px;border:1px solid #cfd8d2">ส่งแล้ว</th>'+
       '<th style="padding:8px;border:1px solid #cfd8d2">อัตราส่ง</th></tr>'+rowsHtml+'</table>'+
       '<div style="margin-top:16px;font-size:12px;color:#8a948e;text-align:right">ระบบติดตามงาน • '+thaiDate(new Date())+'</div></div></div>';
+}
+
+/* ===== รายงานรายชิ้นงาน (ตามงาน/ผลสอบ → รูปเข้า LINE) ===== */
+var workRptDlg=document.getElementById('workRptDlg');
+var curRptWork=null;
+function openWorkReport(wid){
+  if(!cur){return;}
+  var w=null; cur.works.forEach(function(x){if(x.id===wid)w=x;});
+  if(!w){return;}
+  if(!cur.students.length){alert('ยังไม่มีนักเรียนในห้องนี้');return;}
+  curRptWork=w;
+  document.getElementById('wrTitle').textContent=(w.type==='สอบ'?'📋 ผลสอบ: ':'📋 ตามงาน: ')+w.name;
+  document.getElementById('wrPreview').innerHTML=buildWorkReportHtml(w);
+  workRptDlg.showModal();
+}
+document.getElementById('wrClose').onclick=function(){workRptDlg.close();};
+document.getElementById('wrLine').onclick=function(){
+  if(!curRptWork)return;
+  var w=curRptWork;
+  loadH2C(function(){
+    var holder=document.createElement('div'); holder.style.cssText='position:fixed;left:-10000px;top:0';
+    holder.innerHTML=buildWorkReportHtml(w); document.body.appendChild(holder);
+    window.html2canvas(holder.firstChild,{scale:2,backgroundColor:'#fffdf7'}).then(function(canvas){
+      document.body.removeChild(holder);
+      canvas.toBlob(function(blob){
+        var fname=((w.type==='สอบ'?'ผลสอบ_':'ตามงาน_')+w.name+'_'+cur.room+'.png').replace(/\s+/g,'').replace(/[\/\\:*?"<>|]/g,'');
+        var file=new File([blob],fname,{type:'image/png'});
+        if(navigator.canShare&&navigator.canShare({files:[file]})){
+          navigator.share({files:[file],title:(w.type==='สอบ'?'ผลสอบ ':'ตามงาน ')+w.name}).catch(function(){});
+        } else { var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click(); }
+      },'image/png');
+    }).catch(function(){ if(holder.parentNode)document.body.removeChild(holder); alert('สร้างรูปไม่สำเร็จ'); });
+  });
+};
+function buildWorkReportHtml(w){
+  var title=((reportTitleEl&&reportTitleEl.value)||'').trim();
+  var headLabel=w.type==='สอบ'?'📋 รายงานผลสอบ':'📋 รายงานการตามงาน';
+  var head='<div style="background:#2c4a39;color:#f4f1e6;padding:20px 26px">'+
+    '<div style="font-size:24px;font-weight:700">'+headLabel+'</div>'+
+    '<div style="font-size:18px;margin-top:3px;font-weight:600">'+escapeHtml(w.name)+(w.type==='สอบ'?' <span style="opacity:.85;font-size:15px">(เต็ม '+(w.max||0)+' คะแนน)</span>':'')+'</div>'+
+    (title?'<div style="font-size:15px;margin-top:2px;opacity:.92">'+escapeHtml(title)+'</div>':'')+
+    '<div style="font-size:15px;margin-top:2px;opacity:.92">'+escapeHtml(cur.room)+' · '+escapeHtml(cur.subject)+'</div>'+
+    '<div style="font-size:13px;margin-top:2px;opacity:.8">ณ วันที่ '+thaiDate(new Date())+'</div></div>';
+  var n=cur.students.length, body='';
+
+  if(w.type==='สอบ'){
+    var scored=[],absent=[];
+    cur.students.forEach(function(s){
+      var v=val(s.id,w.id);
+      if(v!==''&&v!=null&&!isNaN(v)) scored.push({s:s,score:Number(v)});
+      else absent.push(s);
+    });
+    var sum=0,max=null,min=null;
+    scored.forEach(function(o){sum+=o.score; if(max==null||o.score>max)max=o.score; if(min==null||o.score<min)min=o.score;});
+    var avg=scored.length?Math.round(sum/scored.length*100)/100:0;
+    var rows=cur.students.map(function(s){
+      var v=val(s.id,w.id); var has=(v!==''&&v!=null&&!isNaN(v));
+      return '<tr><td style="padding:7px;border:1px solid #e2e0d4;text-align:center">'+escapeHtml(s.no||'')+'</td>'+
+        '<td style="padding:7px;border:1px solid #e2e0d4">'+escapeHtml(s.name||'')+'</td>'+
+        (has
+          ? '<td style="padding:7px;border:1px solid #e2e0d4;text-align:center;font-weight:700">'+Number(v)+' <span style="color:#8a948e;font-weight:400">/ '+(w.max||0)+'</span></td>'
+          : '<td style="padding:7px;border:1px solid #e2e0d4;text-align:center;color:#c0392b;font-weight:700">ขาดสอบ</td>')+'</tr>';
+    }).join('');
+    body='<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">'+
+      statBox(avg+' / '+(w.max||0),'คะแนนเฉลี่ย','#2c4a39')+
+      statBox(scored.length?max:'-','สูงสุด','#1f6f3e')+
+      statBox(scored.length?min:'-','ต่ำสุด','#8a5a00')+
+      statBox(scored.length+'/'+n,'ทำข้อสอบ','#2c4a39')+
+      statBox(absent.length,'ขาดสอบ',absent.length?'#c0392b':'#1f6f3e')+'</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:15px"><tr style="background:#2c4a39;color:#f4f1e6">'+
+      '<th style="padding:8px;border:1px solid #cfd8d2;width:60px">เลขที่</th><th style="padding:8px;text-align:left;border:1px solid #cfd8d2">ชื่อ-สกุล</th>'+
+      '<th style="padding:8px;border:1px solid #cfd8d2;width:120px">คะแนน</th></tr>'+rows+'</table>'+
+      (absent.length? '<div style="margin-top:14px;padding:12px 14px;background:#fceae8;border-radius:10px;font-size:15px">'+
+        '<b style="color:#c0392b">ขาดสอบ '+absent.length+' คน:</b> '+absent.map(function(s){return escapeHtml((s.no?s.no+'. ':'')+s.name);}).join(', ')+'</div>' : '');
+  } else {
+    var sentL=[],missL=[];
+    cur.students.forEach(function(s){ (isSent(s.id,w.id)?sentL:missL).push(s); });
+    var pct=n?Math.round(sentL.length/n*100):0;
+    var rc=pct>=80?'#1f6f3e':pct>=60?'#e0a800':'#c0392b';
+    var rows=cur.students.map(function(s){
+      var sent=isSent(s.id,w.id);
+      return '<tr><td style="padding:7px;border:1px solid #e2e0d4;text-align:center">'+escapeHtml(s.no||'')+'</td>'+
+        '<td style="padding:7px;border:1px solid #e2e0d4">'+escapeHtml(s.name||'')+'</td>'+
+        (sent
+          ? '<td style="padding:7px;border:1px solid #e2e0d4;text-align:center;color:#1f6f3e;font-weight:700">✓ ส่งแล้ว</td>'
+          : '<td style="padding:7px;border:1px solid #e2e0d4;text-align:center;color:#c0392b;font-weight:700">✗ ยังไม่ส่ง</td>')+'</tr>';
+    }).join('');
+    body='<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">'+
+      statBox(n,'นักเรียน','#2c4a39')+
+      statBox(sentL.length,'ส่งแล้ว','#1f6f3e')+
+      statBox(missL.length,'ยังไม่ส่ง',missL.length?'#c0392b':'#1f6f3e')+
+      statBox(pct+'%','อัตราการส่ง',rc)+'</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:15px"><tr style="background:#2c4a39;color:#f4f1e6">'+
+      '<th style="padding:8px;border:1px solid #cfd8d2;width:60px">เลขที่</th><th style="padding:8px;text-align:left;border:1px solid #cfd8d2">ชื่อ-สกุล</th>'+
+      '<th style="padding:8px;border:1px solid #cfd8d2;width:120px">สถานะ</th></tr>'+rows+'</table>'+
+      (missL.length? '<div style="margin-top:14px;padding:12px 14px;background:#fceae8;border-radius:10px;font-size:15px">'+
+        '<b style="color:#c0392b">ยังไม่ส่ง '+missL.length+' คน:</b> '+missL.map(function(s){return escapeHtml((s.no?s.no+'. ':'')+s.name);}).join(', ')+'</div>'
+        : '<div style="margin-top:14px;padding:14px;background:#e8f3ec;color:#1f6f3e;border-radius:10px;text-align:center;font-weight:700;font-size:17px">🎉 ส่งครบทุกคน!</div>');
+  }
+  return '<div style="width:720px;box-sizing:border-box;background:#fffdf7;font-family:Sarabun,sans-serif;color:#26302a;border-radius:14px;overflow:hidden">'+
+    head+'<div style="padding:18px 26px 22px">'+body+
+    '<div style="margin-top:16px;font-size:12px;color:#8a948e;text-align:right">ระบบติดตามงาน • '+thaiDate(new Date())+'</div></div></div>';
 }
 
 /* ===== แท็บ ===== */
