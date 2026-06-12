@@ -160,6 +160,7 @@
       <div class="toolbar">
         <button id="btnAddStudent" class="ghost small">➕ เพิ่มนักเรียน</button>
         <button id="btnImport" class="ghost small">📋 วางรายชื่อ (เลขที่,ชื่อ)</button>
+        <select id="copyFrom" style="max-width:260px"><option value="">📥 คัดลอกรายชื่อจากห้อง/วิชาอื่น…</option></select>
         <span class="pill" id="stuCount">0 คน</span>
       </div>
       <div class="tbl-scroll" style="max-height:52vh">
@@ -191,9 +192,10 @@
 <dialog id="createDlg"><div class="dlg-body">
   <h2>สร้างห้อง / วิชา</h2>
   <div class="row">
-    <div class="field"><label>ห้อง / ชั้น</label><input id="cRoom" placeholder="เช่น ม.6/1"></div>
+    <div class="field"><label>ห้อง / ชั้น</label><input id="cRoom" list="roomOpts" placeholder="เช่น ม.6/1"><datalist id="roomOpts"></datalist></div>
     <div class="field"><label>รายวิชา</label><input id="cSubject" placeholder="เช่น คณิตศาสตร์ 5"></div>
   </div>
+  <div id="cRoomHint" class="hint" style="margin-top:8px"></div>
   <div class="row" style="margin-top:14px;justify-content:flex-end">
     <button class="ghost" id="cCancel">ยกเลิก</button><button id="cOk">สร้าง</button>
   </div>
@@ -265,20 +267,41 @@ function updateLabel(){
   renderSetBar();
 }
 
+/* รายชื่อห้องที่เคยสร้าง + ดึงรายชื่อนักเรียนของห้องนั้น (เลือกชุดที่มีคนเยอะสุด) */
+function existingRooms(){
+  var r={}; Object.keys(DB.sets).forEach(function(k){r[DB.sets[k].room]=1;}); return Object.keys(r);
+}
+function roomRoster(room){
+  var best=null;
+  Object.keys(DB.sets).forEach(function(k){
+    var s=DB.sets[k]; if(s.room===room && s.students.length && (!best||s.students.length>best.students.length)) best=s;
+  });
+  if(!best)return [];
+  return best.students.map(function(s){return {id:uid('s'),no:s.no,name:s.name};});
+}
+
 /* สร้างห้อง/วิชา */
 var createDlg=document.getElementById('createDlg');
+var cRoomEl=document.getElementById('cRoom'), cRoomHint=document.getElementById('cRoomHint');
+function updateRoomHint(){
+  var room=cRoomEl.value.trim();
+  var n=roomRoster(room).length;
+  cRoomHint.innerHTML = (room&&n) ? '✅ เคยมีห้อง '+escapeHtml(room)+' แล้ว — จะดึงรายชื่อ '+n+' คนมาให้อัตโนมัติ' : '';
+}
+cRoomEl.addEventListener('input',updateRoomHint);
 document.getElementById('btnCreate').onclick=function(){
-  document.getElementById('cRoom').value=''; document.getElementById('cSubject').value='';
+  cRoomEl.value=''; document.getElementById('cSubject').value=''; cRoomHint.innerHTML='';
+  document.getElementById('roomOpts').innerHTML=existingRooms().map(function(r){return '<option value="'+escapeHtml(r)+'">';}).join('');
   createDlg.showModal();
 };
 document.getElementById('cCancel').onclick=function(){createDlg.close();};
 document.getElementById('cOk').onclick=function(){
-  var room=document.getElementById('cRoom').value.trim();
+  var room=cRoomEl.value.trim();
   var subject=document.getElementById('cSubject').value.trim();
   if(!room||!subject){alert('กรอกห้องและรายวิชา');return;}
   var k=room+'|'+subject;
   if(DB.sets[k]){alert('มีห้อง/วิชานี้อยู่แล้ว');}
-  else { DB.sets[k]={room:room,subject:subject,works:[],students:[],data:{}}; save(); }
+  else { DB.sets[k]={room:room,subject:subject,works:[],students:roomRoster(room),data:{}}; save(); }
   createDlg.close(); openSet(k);
 };
 document.getElementById('btnDeleteSet').onclick=function(){
@@ -391,6 +414,16 @@ document.getElementById('btnAddWork').onclick=function(){
 function renderStudents(){
   var thead=document.querySelector('#stuTable thead'), tbody=document.querySelector('#stuTable tbody');
   document.getElementById('stuCount').textContent=(cur?cur.students.length:0)+' คน';
+  // เติมเมนูคัดลอกรายชื่อจากชุดอื่นที่มีนักเรียน
+  var cf=document.getElementById('copyFrom');
+  if(cf){
+    var opts='<option value="">📥 คัดลอกรายชื่อจากห้อง/วิชาอื่น…</option>';
+    Object.keys(DB.sets).forEach(function(k){
+      var s=DB.sets[k]; if(k!==curKey && s.students.length)
+        opts+='<option value="'+escapeHtml(k)+'">'+escapeHtml(s.room+' · '+s.subject)+' ('+s.students.length+' คน)</option>';
+    });
+    cf.innerHTML=opts;
+  }
   if(!cur||!cur.students.length){thead.innerHTML='';tbody.innerHTML='<tr><td class="muted" style="padding:14px">ยังไม่มีนักเรียน</td></tr>';return;}
   thead.innerHTML='<tr><th style="width:60px">เลขที่</th><th style="text-align:left">ชื่อ-สกุล</th><th style="width:50px"></th></tr>';
   tbody.innerHTML='';
@@ -413,6 +446,14 @@ document.getElementById('stuTable').addEventListener('click',function(e){
     cur.students.splice(Number(d),1); renderStudents(); renderGrid(); updateLabel(); save();
   }
 });
+document.getElementById('copyFrom').onchange=function(){
+  var k=this.value; this.value='';
+  if(!k||!cur||!DB.sets[k])return;
+  var src=DB.sets[k];
+  if(cur.students.length && !confirm('แทนรายชื่อเดิม '+cur.students.length+' คน ด้วยรายชื่อจาก '+src.room+' · '+src.subject+' ('+src.students.length+' คน)?'))return;
+  cur.students=src.students.map(function(s){return {id:uid('s'),no:s.no,name:s.name};});
+  renderStudents(); renderGrid(); updateLabel(); save();
+};
 document.getElementById('btnAddStudent').onclick=function(){
   if(!cur){alert('เปิดห้องก่อน');return;}
   cur.students.push({id:uid('s'),no:cur.students.length+1,name:''}); renderStudents(); renderGrid(); updateLabel(); save();
