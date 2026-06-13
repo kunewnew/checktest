@@ -211,6 +211,7 @@
         <input type="file" id="rosterFile" accept=".xlsx,.xls,.csv" class="hide">
         <button id="btnImport" class="ghost small">📋 วางรายชื่อ (เลขที่,ชื่อ)</button>
         <select id="copyFrom" style="max-width:260px"><option value="">📥 คัดลอกรายชื่อจากห้อง/วิชาอื่น…</option></select>
+        <button class="ghost small" style="background:#7b1325;color:#fff;border-color:#7b1325" onclick="window.open('../สร้างการ์ดคิวอาร์.html','_blank')">🖨️ จัดทำบัตร QR Code</button>
         <span class="pill" id="stuCount">0 คน</span>
       </div>
       <div class="tbl-scroll" style="max-height:52vh">
@@ -378,6 +379,7 @@
 /* ===== เมนูเว็บ (drawer) — เพิ่มเว็บใหม่: ก๊อปบรรทัด {icon,label,url} วางต่อท้าย ===== */
 var SITE_LINKS=[
   {icon:'📝', label:'ติดตามการส่งงาน (เว็บนี้)', url:''},
+  {icon:'🖨️', label:'พิมพ์การ์ด QR Code', url:'../สร้างการ์ดคิวอาร์.html'},
   {icon:'⚙️', label:'เช็คชื่อห้องเตรียมวิศวะ', url:'https://kunewnew.github.io/checkin/'},
   {icon:'📚', label:'เช็คชื่อรายวิชา', url:'https://kunewnew.github.io/checkinSD/'},
   {icon:'🦆', label:'สุ่มเลขที่ เป็ดแข่งวิ่ง', url:'https://kunewnew.github.io/duckrace/'},
